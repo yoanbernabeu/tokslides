@@ -1,6 +1,6 @@
 import React from 'react';
 import { Theme, SlideLayout } from '../types';
-import { Palette, Layers, type LucideIcon, Video, Layout, AlignCenter, AlignLeft, AlignRight, ArrowUpToLine, ArrowDownToLine, ChevronRight } from 'lucide-react';
+import { Palette, Layers, type LucideIcon, Layout, AlignCenter, AlignLeft, AlignRight, ArrowUpToLine, ArrowDownToLine, ChevronRight } from 'lucide-react';
 
 interface SidebarProps {
   themes: Theme[];
@@ -47,8 +47,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         className="w-full p-5 border-b border-gray-800 flex items-center gap-3 hover:bg-gray-800/50 transition-colors group"
         title="Retour à l'accueil"
       >
-        <div className="w-8 h-8 bg-gradient-to-tr from-[#FF0050] to-[#00F2EA] rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/10 group-hover:scale-105 transition-transform">
-          <Video size={16} className="text-white" />
+        <div className="w-8 h-8 bg-gradient-to-tr from-[#FF0050] to-[#00F2EA] rounded-md flex items-center justify-center shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform">
+          <Layers size={18} className="text-white" />
         </div>
         <h1 className="font-bold text-lg tracking-tight text-white">TokSlides</h1>
       </button>
