@@ -1,0 +1,46 @@
+{
+  "name": "tokslides",
+  "version": "1.0.0",
+  "description": "Creez des slides verticales pour TikTok, Reels & Shorts en quelques secondes",
+  "author": "Yoan Bernabeu",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yoanbernabeu/tokslides.git"
+  },
+  "homepage": "https://yoanbernabeu.github.io/tokslides",
+  "bugs": {
+    "url": "https://github.com/yoanbernabeu/tokslides/issues"
+  },
+  "keywords": [
+    "slides",
+    "tiktok",
+    "reels",
+    "shorts",
+    "video",
+    "markdown",
+    "presentation",
+    "webcam",
+    "react"
+  ],
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react-markdown": "^10.1.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "lucide-react": "^0.562.0",
+    "html-to-image": "1.11.11"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "TokSlides",
+  "description": "Un éditeur de présentation style Slidev optimisé pour les formats verticaux (TikTok, Shorts, Reels). Créez des slides en Markdown instantanément.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "display-capture"
+  ]
+}

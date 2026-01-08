@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question ou Discussion
+    url: https://github.com/yoanbernabeu/tokslides/discussions
+    about: Posez vos questions dans les Discussions GitHub
