@@ -268,7 +268,7 @@ const Preview: React.FC<PreviewProps> = ({
 
       const scaleX = width / BASE_WIDTH;
       const scaleY = height / BASE_HEIGHT;
-      const marginFactor = isFullScreen ? 1 : 0.9;
+      const marginFactor = isFullScreen ? 1 : 0.98;
       const newScale = Math.min(scaleX, scaleY) * marginFactor;
       setScale(newScale);
     };

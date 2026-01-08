@@ -187,8 +187,8 @@ const Editor: React.FC<EditorProps> = ({ value, onChange, onUploadImage }) => {
 
       {/* Crop Modal */}
       {pendingImage && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1E1E1E] rounded-2xl border border-gray-700 shadow-2xl max-w-lg w-full overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4">
+          <div className="bg-[#1E1E1E] rounded-t-2xl md:rounded-2xl border border-gray-700 shadow-2xl w-full md:max-w-lg overflow-hidden max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-[#181818]">
               <div className="flex items-center gap-2">
                 <ImageIcon size={18} className="text-blue-400" />
@@ -199,11 +199,11 @@ const Editor: React.FC<EditorProps> = ({ value, onChange, onUploadImage }) => {
               </button>
             </div>
 
-            <div className="p-4">
+            <div className="p-4 overflow-auto flex-1">
               <div
                 ref={cropContainerRef}
                 className="relative mx-auto bg-gray-900 rounded-lg overflow-hidden cursor-crosshair select-none"
-                style={{ width: previewDims.width, height: previewDims.height }}
+                style={{ width: Math.min(previewDims.width, window.innerWidth - 32), height: Math.min(previewDims.height, (window.innerWidth - 32) * previewDims.height / previewDims.width) }}
                 onMouseDown={handleCropMouseDown}
                 onMouseMove={handleCropMouseMove}
                 onMouseUp={handleCropMouseUp}
@@ -273,7 +273,7 @@ const Editor: React.FC<EditorProps> = ({ value, onChange, onUploadImage }) => {
           <span>--- pour nouvelle slide</span>
         </div>
       </div>
-      <div className="px-4 py-2 border-b border-gray-700/50 bg-[#161616] flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-500 font-mono">
+      <div className="hidden md:flex px-4 py-2 border-b border-gray-700/50 bg-[#161616] flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-500 font-mono">
         <span><span className="text-gray-400"># </span>Titre</span>
         <span><span className="text-gray-400">## </span>Sous-titre</span>
         <span><span className="text-gray-400">**</span>gras<span className="text-gray-400">**</span></span>

@@ -44,17 +44,17 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({
   };
 
   return (
-    <div className="absolute inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-[#181818] border border-gray-700 rounded-2xl w-full max-w-4xl h-[80vh] flex flex-col shadow-2xl overflow-hidden">
-        
+    <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-end md:items-center justify-center p-0 md:p-4">
+      <div className="bg-[#181818] border border-gray-700 rounded-t-2xl md:rounded-2xl w-full md:max-w-4xl h-[90vh] md:h-[80vh] flex flex-col shadow-2xl overflow-hidden">
+
         {/* Header */}
-        <div className="p-6 border-b border-gray-700 flex justify-between items-center bg-[#202020]">
+        <div className="p-4 md:p-6 border-b border-gray-700 flex justify-between items-center bg-[#202020]">
           <div>
-            <h2 className="font-bold text-2xl text-white flex items-center gap-3">
-              <FolderOpen size={28} className="text-primary" />
+            <h2 className="font-bold text-lg md:text-2xl text-white flex items-center gap-2 md:gap-3">
+              <FolderOpen size={24} className="text-primary md:w-7 md:h-7" />
               Mes Projets
             </h2>
-            <p className="text-gray-400 text-sm mt-1">Gérez vos présentations TokSlides</p>
+            <p className="text-gray-400 text-xs md:text-sm mt-1">Gérez vos présentations TokSlides</p>
           </div>
           <button onClick={onClose} className="p-2 bg-gray-800 hover:bg-gray-700 rounded-full text-white transition-colors">
             <X size={20} />
@@ -62,13 +62,13 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+
             {/* New Project Card */}
             <button
               onClick={onCreateProject}
-              className="flex flex-col items-center justify-center h-48 rounded-xl border-2 border-dashed border-gray-700 hover:border-primary hover:bg-primary/5 transition-all group"
+              className="flex flex-col items-center justify-center h-36 md:h-48 rounded-xl border-2 border-dashed border-gray-700 hover:border-primary hover:bg-primary/5 transition-all group"
             >
               <div className="w-12 h-12 rounded-full bg-gray-800 group-hover:bg-primary group-hover:text-white flex items-center justify-center mb-3 transition-colors text-gray-400">
                 <Plus size={24} />
@@ -85,14 +85,14 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({
                 <div
                   key={project.id}
                   onClick={() => onSelectProject(project.id)}
-                  className={`relative group h-48 rounded-xl border transition-all cursor-pointer overflow-hidden flex flex-col ${
-                    isCurrent 
-                      ? 'border-primary ring-2 ring-primary/30 bg-[#252525]' 
+                  className={`relative group h-36 md:h-48 rounded-xl border transition-all cursor-pointer overflow-hidden flex flex-col ${
+                    isCurrent
+                      ? 'border-primary ring-2 ring-primary/30 bg-[#252525]'
                       : 'border-gray-700 bg-[#1e1e1e] hover:border-gray-500 hover:bg-[#252525]'
                   }`}
                 >
                   {/* Preview / Decoration */}
-                  <div className={`h-24 w-full ${theme?.bgGradient || 'bg-gray-800'} opacity-50 relative overflow-hidden`}>
+                  <div className={`h-16 md:h-24 w-full ${theme?.bgGradient || 'bg-gray-800'} opacity-50 relative overflow-hidden`}>
                      <div className="absolute inset-0 bg-gradient-to-t from-[#1e1e1e] to-transparent" />
                      <FileText className="absolute top-4 left-4 text-white/20" size={48} />
                   </div>

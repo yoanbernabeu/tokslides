@@ -39,7 +39,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
-    <div className="w-[300px] bg-[#121212] border-r border-gray-800 flex flex-col h-full z-20 shadow-xl">
+    <div className="w-full md:w-[300px] bg-[#121212] border-r border-gray-800 flex flex-col h-full z-20 shadow-xl">
       
       {/* Header */}
       <button

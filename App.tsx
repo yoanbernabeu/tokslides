@@ -7,7 +7,7 @@ import LandingPage from './components/LandingPage';
 import ProjectManager from './components/ProjectManager';
 import { INITIAL_MARKDOWN, THEMES } from './constants';
 import { SlideData, Coordinates, CameraShape, SlideLayout, Project } from './types';
-import { ChevronLeft, ChevronRight, Maximize2, Camera, Settings2, X, Monitor, Circle, Smartphone, Sparkles, Square, FolderOpen, Save, Eye, EyeOff, Disc, StopCircle, Github } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Maximize2, Camera, Settings2, X, Monitor, Circle, Smartphone, Sparkles, Square, FolderOpen, Save, Eye, EyeOff, Disc, StopCircle, Github, Menu, Code, Image, Palette } from 'lucide-react';
 import { saveImageToDB } from './utils/storage';
 import { rasterizeElement } from './utils/rasterizer';
 
@@ -68,6 +68,10 @@ function App() {
   // Editing Project Name State
   const [isEditingName, setIsEditingName] = useState(false);
   const [projectNameInput, setProjectNameInput] = useState("");
+
+  // Mobile Navigation State
+  const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('editor');
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
   // Recording State & Refs
   const [isRecording, setIsRecording] = useState(false);
@@ -687,8 +691,8 @@ function App() {
 
       {/* Settings Modal */}
       {showSettings && (
-        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-[#181818] border border-gray-700 rounded-2xl w-[90%] max-w-md overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end md:items-center justify-center">
+          <div className="bg-[#181818] border border-gray-700 rounded-t-2xl md:rounded-2xl w-full md:w-[90%] md:max-w-md overflow-hidden shadow-2xl max-h-[85vh] flex flex-col">
             <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-[#202020]">
               <h2 className="font-bold text-lg flex items-center gap-2">
                 <Settings2 size={20} className="text-primary" />
@@ -753,12 +757,42 @@ function App() {
         </div>
       )}
 
-      {/* Mobile only warning */}
-      <div className="md:hidden fixed inset-0 z-50 bg-black flex items-center justify-center p-8 text-center">
-        <p className="text-gray-400">Veuillez utiliser un ordinateur pour éditer vos slides TokSlides.</p>
-      </div>
+      {/* Mobile Sidebar Drawer */}
+      {showMobileSidebar && (
+        <div className="md:hidden fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileSidebar(false)} />
+          <div className="absolute left-0 top-0 bottom-0 w-[85%] max-w-[320px] animate-slide-in">
+            <Sidebar
+              themes={THEMES}
+              currentThemeId={currentThemeId}
+              onSelectTheme={(id) => {
+                setCurrentThemeId(id);
+                setShowMobileSidebar(false);
+              }}
+              slides={slides}
+              currentSlideIndex={currentSlideIndex}
+              selectedSlideIndices={selectedSlideIndices}
+              onSelectSlide={(index, e) => {
+                handleSlideSelect(index, e);
+                setShowMobileSidebar(false);
+              }}
+              activeLayout={activeSlide.layout}
+              onLayoutChange={handleLayoutChange}
+              onGoHome={() => {
+                if (cameraStream) {
+                  cameraStream.getTracks().forEach(track => track.stop());
+                  setCameraStream(null);
+                }
+                setShowLanding(true);
+                setCurrentProjectId(null);
+                setShowMobileSidebar(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
 
-      {/* Sidebar */}
+      {/* Desktop Sidebar */}
       <div className={`${isPreviewMode ? 'hidden' : 'hidden md:block'}`}>
         <Sidebar
           themes={THEMES}
@@ -785,22 +819,22 @@ function App() {
       <div className="flex-1 flex flex-col min-w-0">
         
         {/* Top Bar */}
-        <div className={`h-14 border-b border-gray-800 bg-[#121212] flex items-center justify-between px-4 gap-4 ${isRecording || countdown !== null ? 'opacity-50 pointer-events-none' : ''}`}>
-          
+        <div className={`h-14 border-b border-gray-800 bg-[#121212] flex items-center justify-between px-2 md:px-4 gap-2 md:gap-4 ${isRecording || countdown !== null ? 'opacity-50 pointer-events-none' : ''}`}>
+
           {/* Left: Project Info */}
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            {/* GitHub Link */}
+          <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+            {/* GitHub Link - Desktop only */}
             <a
               href="https://github.com/yoanbernabeu/tokslides"
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors flex-shrink-0"
+              className="hidden md:flex p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors flex-shrink-0"
               title="Voir sur GitHub"
             >
               <Github size={18} />
             </a>
 
-            <div className="h-6 w-px bg-gray-800 mx-1 flex-shrink-0"></div>
+            <div className="hidden md:block h-6 w-px bg-gray-800 mx-1 flex-shrink-0"></div>
 
             <button
               onClick={() => setShowProjectManager(true)}
@@ -809,12 +843,12 @@ function App() {
             >
               <FolderOpen size={18} />
             </button>
-            
-            <div className="h-6 w-px bg-gray-800 mx-1 flex-shrink-0"></div>
+
+            <div className="hidden md:block h-6 w-px bg-gray-800 mx-1 flex-shrink-0"></div>
 
             <div className="flex flex-col min-w-0 overflow-hidden">
                {/* Editable Project Name */}
-               <input 
+               <input
                  value={isEditingName ? projectNameInput : (currentProject?.name || "Projet Sans Titre")}
                  onChange={(e) => setProjectNameInput(e.target.value)}
                  onFocus={() => {
@@ -827,16 +861,16 @@ function App() {
                      e.currentTarget.blur();
                    }
                  }}
-                 className={`text-xs font-bold text-white bg-transparent border border-transparent rounded px-1 min-w-[150px] outline-none transition-all ${isEditingName ? 'border-gray-600 bg-gray-900' : 'hover:border-gray-800'}`}
+                 className={`text-xs font-bold text-white bg-transparent border border-transparent rounded px-1 min-w-[100px] md:min-w-[150px] outline-none transition-all ${isEditingName ? 'border-gray-600 bg-gray-900' : 'hover:border-gray-800'}`}
                />
-               
+
                {/* Save Status */}
                <div className="flex items-center gap-2 px-1">
-                 <span className="text-[10px] text-gray-500 flex-shrink-0">
+                 <span className="text-[10px] text-gray-500 flex-shrink-0 hidden sm:inline">
                    {timeAgo}
                  </span>
-                 <button 
-                    onClick={handleManualSave} 
+                 <button
+                    onClick={handleManualSave}
                     className="text-[10px] text-gray-500 hover:text-primary transition-colors flex items-center gap-1"
                     title="Forcer la sauvegarde"
                  >
@@ -878,10 +912,10 @@ function App() {
                <span className="hidden sm:inline text-xs font-bold">Magic Prompt</span>
             </button>
 
-            <div className="h-6 w-px bg-gray-800 mx-1"></div>
-            
-            {/* Webcam Controls */}
-            <div className="flex items-center gap-1 bg-gray-800/50 rounded-lg p-1 mr-2 border border-gray-700">
+            <div className="hidden md:block h-6 w-px bg-gray-800 mx-1"></div>
+
+            {/* Webcam Controls - Desktop only (on mobile, it's in bottom nav) */}
+            <div className="hidden md:flex items-center gap-1 bg-gray-800/50 rounded-lg p-1 mr-2 border border-gray-700">
               <button
                 onClick={toggleCamera}
                 disabled={isRecording || countdown !== null}
@@ -900,21 +934,21 @@ function App() {
               </button>
             </div>
 
-            <div className="h-6 w-px bg-gray-800 mx-1"></div>
+            <div className="hidden md:block h-6 w-px bg-gray-800 mx-1"></div>
 
-            <button 
+            <button
               onClick={() => setShowFooter(!showFooter)}
               disabled={isRecording || countdown !== null}
-              className={`p-2 rounded-lg transition-colors ${!showFooter ? 'text-gray-600' : 'text-gray-400 hover:bg-gray-800'} disabled:opacity-50`}
+              className={`hidden md:block p-2 rounded-lg transition-colors ${!showFooter ? 'text-gray-600' : 'text-gray-400 hover:bg-gray-800'} disabled:opacity-50`}
               title={showFooter ? "Masquer le footer (Clean)" : "Afficher le footer"}
             >
               {showFooter ? <Eye size={18} /> : <EyeOff size={18} />}
             </button>
 
-            <button 
+            <button
               onClick={togglePreviewMode}
               disabled={isRecording || countdown !== null}
-              className={`p-2 rounded-lg transition-colors ${isPreviewMode ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800'} disabled:opacity-50`}
+              className={`hidden md:block p-2 rounded-lg transition-colors ${isPreviewMode ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800'} disabled:opacity-50`}
               title="Mode Présentation"
             >
               <Maximize2 size={18} />
@@ -923,18 +957,24 @@ function App() {
         </div>
 
         {/* Workspace */}
-        <div className="flex-1 flex overflow-hidden">
-          
-          {/* Editor Pane */}
-          <div className={`flex-1 transition-all duration-300 ${isPreviewMode ? 'w-0 flex-none opacity-0' : 'w-1/2 min-w-[300px] border-r border-gray-800'}`}>
+        <div className="flex-1 flex overflow-hidden pb-16 md:pb-0">
+
+          {/* Editor Pane - Desktop: side by side, Mobile: tab-based */}
+          <div className={`flex-1 transition-all duration-300
+            ${isPreviewMode ? 'w-0 flex-none opacity-0 hidden' : ''}
+            ${!isPreviewMode ? 'md:w-1/2 md:min-w-[300px] md:border-r md:border-gray-800' : ''}
+            ${mobileTab === 'editor' ? 'block md:block' : 'hidden md:block'}`}>
             <Editor value={markdown} onChange={setMarkdown} onUploadImage={handleUploadImage} />
           </div>
 
-          {/* Preview Pane */}
-          <div className={`transition-all duration-300 bg-[#0F0F0F] relative flex flex-col ${isPreviewMode ? 'w-full' : 'w-1/2'}`}>
+          {/* Preview Pane - Desktop: side by side, Mobile: tab-based */}
+          <div className={`transition-all duration-300 bg-[#0F0F0F] relative flex flex-col h-full
+            ${isPreviewMode ? 'w-full' : 'md:w-1/2 md:flex-1'}
+            ${mobileTab === 'preview' || isPreviewMode ? 'block' : 'hidden md:block'}
+            ${!isPreviewMode && mobileTab === 'preview' ? 'w-full' : ''}`}>
             
             {/* Slide Viewer */}
-            <div className="flex-1 relative">
+            <div className="flex-1 relative h-full">
               <Preview
                 captureRef={captureRef} // Pass ref for rasterization
                 currentSlide={activeSlide}
@@ -973,6 +1013,47 @@ function App() {
 
           </div>
         </div>
+
+        {/* Mobile Bottom Navigation Bar */}
+        {!isPreviewMode && !isRecording && countdown === null && (
+          <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#121212] border-t border-gray-800 flex items-center justify-around px-2 z-40 safe-area-bottom">
+            <button
+              onClick={() => setShowMobileSidebar(true)}
+              className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg transition-colors text-gray-400 hover:text-white`}
+            >
+              <Palette size={18} />
+              <span className="text-[9px] font-medium">Design</span>
+            </button>
+            <button
+              onClick={() => setMobileTab('editor')}
+              className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg transition-colors ${mobileTab === 'editor' ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
+            >
+              <Code size={18} />
+              <span className="text-[9px] font-medium">Éditeur</span>
+            </button>
+            <button
+              onClick={() => setMobileTab('preview')}
+              className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg transition-colors ${mobileTab === 'preview' ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
+            >
+              <Image size={18} />
+              <span className="text-[9px] font-medium">Aperçu</span>
+            </button>
+            <button
+              onClick={toggleCamera}
+              className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg transition-colors ${cameraStream ? 'text-red-400' : 'text-gray-400 hover:text-white'}`}
+            >
+              <Camera size={18} />
+              <span className="text-[9px] font-medium">Caméra</span>
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg transition-colors text-gray-400 hover:text-white`}
+            >
+              <Settings2 size={18} />
+              <span className="text-[9px] font-medium">Config</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
