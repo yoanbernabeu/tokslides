@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Theme, SlideData, Coordinates, CameraShape } from '../types';
 import { getImageFromDB } from '../utils/storage';
+import { segmentFrame, isSegmenterReady } from '../utils/segmentation';
 
 interface PreviewProps {
   currentSlide: SlideData;
@@ -18,6 +19,7 @@ interface PreviewProps {
   captureRef?: React.RefObject<HTMLDivElement | null>;
   showFooter?: boolean;
   onImageResize?: (src: string, newWidth: number) => void;
+  backgroundRemoval?: boolean;
 }
 
 const BASE_WIDTH = 360;
@@ -252,14 +254,37 @@ const Preview: React.FC<PreviewProps> = ({
   cameraShape,
   captureRef,
   showFooter = true,
-  onImageResize
+  onImageResize,
+  backgroundRemoval = false
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const cameraOverlayRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
+  const [segmenterReady, setSegmenterReady] = useState(isSegmenterReady());
   const dragStartRef = useRef<{x: number, y: number} | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+
+  // Poll for segmenter readiness when background removal is enabled
+  useEffect(() => {
+    if (!backgroundRemoval) return;
+
+    if (isSegmenterReady()) {
+      setSegmenterReady(true);
+      return;
+    }
+
+    const checkInterval = setInterval(() => {
+      if (isSegmenterReady()) {
+        setSegmenterReady(true);
+        clearInterval(checkInterval);
+      }
+    }, 100);
+
+    return () => clearInterval(checkInterval);
+  }, [backgroundRemoval]);
 
   useEffect(() => {
     const calculateScale = () => {
@@ -306,7 +331,83 @@ const Preview: React.FC<PreviewProps> = ({
     return () => overlay.removeEventListener('wheel', handleWheel);
   }, [cameraScale, onCameraScaleChange, cameraStream]);
 
+  // Background removal rendering loop
+  useEffect(() => {
+    if (!backgroundRemoval || !cameraStream || !segmenterReady) {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      return;
+    }
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+
+    const renderLoop = () => {
+      if (video.readyState >= 2) {
+        const vidW = video.videoWidth || 640;
+        const vidH = video.videoHeight || 480;
+
+        // Set canvas size to match video
+        if (canvas.width !== vidW || canvas.height !== vidH) {
+          canvas.width = vidW;
+          canvas.height = vidH;
+        }
+
+        // Get segmentation mask
+        const mask = segmentFrame(video, performance.now());
+
+        if (mask && mask.width === vidW && mask.height === vidH) {
+          // Draw video to canvas
+          ctx.drawImage(video, 0, 0, vidW, vidH);
+
+          // Get video pixels
+          const imageData = ctx.getImageData(0, 0, vidW, vidH);
+          const pixels = imageData.data;
+          const maskPixels = mask.data;
+
+          // Apply mask - mask white (255) = person, black (0) = background
+          const totalPixels = vidW * vidH;
+          for (let i = 0; i < totalPixels; i++) {
+            const maskIdx = i * 4;
+            const pixelIdx = i * 4;
+            // Person pixels have R=255 in our mask
+            const isPerson = maskPixels[maskIdx] > 128;
+            if (!isPerson) {
+              pixels[pixelIdx + 3] = 0; // Set alpha to 0 for background
+            }
+          }
+
+          ctx.putImageData(imageData, 0, 0);
+        } else if (mask) {
+          // Fallback: just draw video if mask size doesn't match
+          ctx.drawImage(video, 0, 0, vidW, vidH);
+        }
+      }
+
+      animationFrameRef.current = requestAnimationFrame(renderLoop);
+    };
+
+    renderLoop();
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [backgroundRemoval, cameraStream, segmenterReady]);
+
   const getShapeStyles = () => {
+    // No border/shape when background removal is active and ready
+    if (backgroundRemoval && segmenterReady) {
+      return "overflow-hidden";
+    }
     const base = "overflow-hidden border-4 border-white/20 shadow-xl relative ring-2 ring-black/10 transition-all duration-100";
     switch (cameraShape) {
       case 'circle': return `${base} w-32 h-32 rounded-full`;
@@ -407,13 +508,21 @@ const Preview: React.FC<PreviewProps> = ({
               className={`absolute z-30 group origin-center`}
             >
               <div className={getShapeStyles()}>
+                {/* Video element - always rendered but hidden when using canvas */}
                 <video
                   ref={videoRef}
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full object-cover transform scale-x-[-1] pointer-events-none"
+                  className={`w-full h-full object-cover transform scale-x-[-1] pointer-events-none ${backgroundRemoval && segmenterReady ? 'absolute opacity-0 pointer-events-none' : ''}`}
                 />
+                {/* Canvas for background removal rendering */}
+                {backgroundRemoval && segmenterReady && (
+                  <canvas
+                    ref={canvasRef}
+                    className="w-full h-full object-cover transform scale-x-[-1] pointer-events-none"
+                  />
+                )}
               </div>
               {/* Tooltip hint on hover */}
               <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">

@@ -10,6 +10,7 @@ import { SlideData, Coordinates, CameraShape, SlideLayout, Project } from './typ
 import { ChevronLeft, ChevronRight, Maximize2, Camera, Settings2, X, Monitor, Circle, Smartphone, Sparkles, Square, FolderOpen, Save, Eye, EyeOff, Disc, StopCircle, Github, Menu, Code, Image, Palette } from 'lucide-react';
 import { saveImageToDB } from './utils/storage';
 import { rasterizeElement } from './utils/rasterizer';
+import { initSegmenter, segmentFrame, isSegmenterReady, disposeSegmenter } from './utils/segmentation';
 
 const LOCAL_STORAGE_KEY = 'tokslides-projects';
 
@@ -48,16 +49,32 @@ function App() {
   const [cameraPosition, setCameraPosition] = useState<Coordinates>({ x: 85, y: 85 });
   const [cameraScale, setCameraScale] = useState<number>(1);
   const [cameraShape, setCameraShape] = useState<CameraShape>('circle');
+  const [backgroundRemoval, setBackgroundRemoval] = useState(false);
   
   // Create refs for mutable state used in the animation loop to prevent closure staleness
   const cameraPositionRef = useRef(cameraPosition);
   const cameraScaleRef = useRef(cameraScale);
   const cameraShapeRef = useRef(cameraShape);
+  const backgroundRemovalRef = useRef(backgroundRemoval);
+  const segmentationMaskRef = useRef<ImageData | null>(null);
 
   // Sync refs
   useEffect(() => { cameraPositionRef.current = cameraPosition; }, [cameraPosition]);
   useEffect(() => { cameraScaleRef.current = cameraScale; }, [cameraScale]);
   useEffect(() => { cameraShapeRef.current = cameraShape; }, [cameraShape]);
+  useEffect(() => { backgroundRemovalRef.current = backgroundRemoval; }, [backgroundRemoval]);
+
+  // Initialize segmenter when background removal is enabled
+  useEffect(() => {
+    if (backgroundRemoval && !isSegmenterReady()) {
+      initSegmenter().then(success => {
+        if (!success) {
+          alert("Impossible d'initialiser la suppression d'arrière-plan. Votre navigateur peut ne pas être compatible.");
+          setBackgroundRemoval(false);
+        }
+      });
+    }
+  }, [backgroundRemoval]);
   
   // Devices & Settings
   const [showSettings, setShowSettings] = useState(false);
@@ -76,6 +93,8 @@ function App() {
   // Recording State & Refs
   const [isRecording, setIsRecording] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null); // Countdown state (3, 2, 1...)
+  const [elapsedTime, setElapsedTime] = useState(0); // Recording duration in seconds
+  const recordingStartTimeRef = useRef<number | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -232,11 +251,16 @@ function App() {
     const ctx = canvas.getContext('2d', { alpha: false }); // Optimize for no transparency
     if (!ctx) return;
 
+    // Create offscreen canvas for segmentation masking
+    const offscreenCanvas = document.createElement('canvas');
+    const offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+
     const loop = () => {
       // Use Refs to get latest state without closure staleness
       const pos = cameraPositionRef.current;
       const scale = cameraScaleRef.current;
       const shape = cameraShapeRef.current;
+      const useBackgroundRemoval = backgroundRemovalRef.current;
 
       // A. Clear / Draw Background (Default black)
       ctx.fillStyle = '#000000';
@@ -250,10 +274,10 @@ function App() {
       // C. Draw Webcam (Manual compositing with crop)
       if (cameraStream && webcamVideoElementRef.current.readyState >= 2) {
         const vid = webcamVideoElementRef.current;
-        
+
         // Base size logic matches Preview.tsx getShapeStyles
-        const baseSize = 320; 
-        
+        const baseSize = 320;
+
         // Calculate aspect ratio of camera shape container
         let w = baseSize * scale;
         let h = baseSize * scale;
@@ -269,68 +293,115 @@ function App() {
         const x = (pos.x / 100) * CANVAS_WIDTH;
         const y = (pos.y / 100) * CANVAS_HEIGHT;
 
-        // 1. Create Shape Path & Clip
-        ctx.save();
-        ctx.beginPath();
-        if (shape === 'circle') {
-          ctx.arc(x, y, w/2, 0, Math.PI * 2);
-        } else {
-          // Centered rect
-          const lx = x - w/2;
-          const ly = y - h/2;
-          if (radius > 0) ctx.roundRect(lx, ly, w, h, radius);
-          else ctx.rect(lx, ly, w, h);
-        }
-        ctx.clip();
-
-        // 2. Draw Video with object-fit: cover Logic
-        // We calculate source coordinates to crop the video to preserve aspect ratio
         const vidW = vid.videoWidth || 640;
         const vidH = vid.videoHeight || 480;
         const vidRatio = vidW / vidH;
         const shapeRatio = w / h;
-        
-        // Destination dimensions inside the clipped area (same as w, h)
-        // But we need to draw a larger image and offset it to "cover"
+
         let drawW, drawH, drawX, drawY;
 
         if (vidRatio > shapeRatio) {
-           // Video is wider than shape -> Crop sides
            drawH = h;
            drawW = h * vidRatio;
-           drawY = -h/2; // Center Vertically relative to origin
-           drawX = -drawW / 2; // Center Horizontally
+           drawY = -h/2;
+           drawX = -drawW / 2;
         } else {
-           // Video is taller than shape -> Crop top/bottom
            drawW = w;
            drawH = w / vidRatio;
            drawX = -w/2;
            drawY = -drawH / 2;
         }
 
-        // Apply transforms
-        ctx.translate(x, y); 
-        ctx.scale(-1, 1); // Mirror Horizontal
-        
-        // Draw
-        ctx.drawImage(vid, drawX, drawY, drawW, drawH);
+        // Background removal with segmentation
+        if (useBackgroundRemoval && isSegmenterReady() && offscreenCtx) {
+          // Get segmentation mask
+          const mask = segmentFrame(vid, performance.now());
 
-        ctx.restore(); // Restore clip
-        
-        // 3. Draw Border on top
-        ctx.save();
-        ctx.beginPath();
-        if (shape === 'circle') ctx.arc(x, y, w/2, 0, Math.PI * 2);
-        else {
-           const lx = x - w/2;
-           const ly = y - h/2;
-           if (radius > 0) ctx.roundRect(lx, ly, w, h, radius);
-           else ctx.rect(lx, ly, w, h);
+          if (mask && mask.width === vidW && mask.height === vidH) {
+            // Setup offscreen canvas to match video size
+            offscreenCanvas.width = vidW;
+            offscreenCanvas.height = vidH;
+
+            // Draw video to offscreen canvas
+            offscreenCtx.drawImage(vid, 0, 0, vidW, vidH);
+
+            // Get video pixels
+            const videoImageData = offscreenCtx.getImageData(0, 0, vidW, vidH);
+            const videoPixels = videoImageData.data;
+            const maskPixels = mask.data;
+
+            // Apply mask - set alpha to 0 where mask is black (background)
+            const totalPixels = vidW * vidH;
+            for (let i = 0; i < totalPixels; i++) {
+              const maskIdx = i * 4;
+              const pixelIdx = i * 4;
+              const isPerson = maskPixels[maskIdx] > 128; // Threshold
+              if (!isPerson) {
+                videoPixels[pixelIdx + 3] = 0; // Set alpha to 0 for background
+              }
+            }
+
+            // Put masked image back
+            offscreenCtx.putImageData(videoImageData, 0, 0);
+
+            // Draw to main canvas with transparency
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(-1, 1); // Mirror
+            ctx.drawImage(offscreenCanvas, drawX, drawY, drawW, drawH);
+            ctx.restore();
+          } else {
+            // Fallback to normal drawing if mask doesn't match
+            ctx.save();
+            ctx.beginPath();
+            if (shape === 'circle') {
+              ctx.arc(x, y, w/2, 0, Math.PI * 2);
+            } else {
+              const lx = x - w/2;
+              const ly = y - h/2;
+              if (radius > 0) ctx.roundRect(lx, ly, w, h, radius);
+              else ctx.rect(lx, ly, w, h);
+            }
+            ctx.clip();
+            ctx.translate(x, y);
+            ctx.scale(-1, 1);
+            ctx.drawImage(vid, drawX, drawY, drawW, drawH);
+            ctx.restore();
+          }
+        } else {
+          // Normal drawing with shape clipping (no background removal)
+          ctx.save();
+          ctx.beginPath();
+          if (shape === 'circle') {
+            ctx.arc(x, y, w/2, 0, Math.PI * 2);
+          } else {
+            const lx = x - w/2;
+            const ly = y - h/2;
+            if (radius > 0) ctx.roundRect(lx, ly, w, h, radius);
+            else ctx.rect(lx, ly, w, h);
+          }
+          ctx.clip();
+
+          ctx.translate(x, y);
+          ctx.scale(-1, 1); // Mirror Horizontal
+          ctx.drawImage(vid, drawX, drawY, drawW, drawH);
+          ctx.restore();
+
+          // Draw Border on top (only when not using background removal)
+          ctx.save();
+          ctx.beginPath();
+          if (shape === 'circle') ctx.arc(x, y, w/2, 0, Math.PI * 2);
+          else {
+             const lx = x - w/2;
+             const ly = y - h/2;
+             if (radius > 0) ctx.roundRect(lx, ly, w, h, radius);
+             else ctx.rect(lx, ly, w, h);
+          }
+          ctx.lineWidth = 8;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+          ctx.stroke();
+          ctx.restore();
         }
-        ctx.lineWidth = 8;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.stroke();
-        ctx.restore();
       }
 
       animationFrameRef.current = requestAnimationFrame(loop);
@@ -377,6 +448,25 @@ function App() {
       setCountdown(null);
     }
   }, [countdown]);
+
+  // Recording Timer Effect
+  useEffect(() => {
+    if (!isRecording) {
+      setElapsedTime(0);
+      recordingStartTimeRef.current = null;
+      return;
+    }
+
+    recordingStartTimeRef.current = Date.now();
+    const interval = setInterval(() => {
+      if (recordingStartTimeRef.current) {
+        const elapsed = Math.floor((Date.now() - recordingStartTimeRef.current) / 1000);
+        setElapsedTime(elapsed);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isRecording]);
 
   // Phase 3: Technical Start (Engine)
   const startRecordingEngine = async () => {
@@ -662,11 +752,14 @@ function App() {
 
       {/* Recording Overlay */}
       {isRecording && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-red-500/90 text-white px-6 py-3 rounded-full flex items-center gap-4 shadow-[0_0_30px_rgba(255,0,0,0.5)] animate-pulse">
-          <div className="w-3 h-3 bg-white rounded-full"></div>
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-red-500/90 text-white px-6 py-3 rounded-full flex items-center gap-4 shadow-[0_0_30px_rgba(255,0,0,0.5)]">
+          <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
           <span className="font-bold tracking-widest font-mono">REC</span>
-          <button 
-            onClick={handleStopRecording} 
+          <span className="font-mono text-lg font-bold tabular-nums">
+            {String(Math.floor(elapsedTime / 60)).padStart(2, '0')}:{String(elapsedTime % 60).padStart(2, '0')}
+          </span>
+          <button
+            onClick={handleStopRecording}
             className="ml-2 bg-white text-red-600 px-3 py-1 rounded-full text-xs font-bold hover:bg-gray-200"
           >
             STOP
@@ -723,25 +816,55 @@ function App() {
               </div>
 
               {/* Camera Shape */}
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-3 uppercase tracking-wider">Forme de la caméra</label>
-                <div className="flex gap-4">
+              <div className={backgroundRemoval ? 'opacity-40 pointer-events-none' : ''}>
+                <label className="block text-xs font-medium text-gray-400 mb-3 uppercase tracking-wider">
+                  Forme de la caméra
+                  {backgroundRemoval && <span className="ml-2 text-gray-500 normal-case">(désactivé en mode IA)</span>}
+                </label>
+                <div className="flex flex-wrap gap-3">
                   {[
                     { id: 'circle', icon: Circle, label: 'Rond' },
                     { id: 'square', icon: Square, label: 'Carré' },
                     { id: 'rounded', icon: Square, label: 'Arrondi', className: 'rounded-md' },
-                    { id: 'portrait', icon: Smartphone, label: '9:16' }
+                    { id: 'portrait', icon: Smartphone, label: '9:16' },
+                    { id: 'landscape', icon: Monitor, label: '16:9' }
                   ].map((shape) => (
                     <button
                       key={shape.id}
                       onClick={() => setCameraShape(shape.id as CameraShape)}
-                      className={`flex flex-col items-center gap-2 p-3 rounded-lg border transition-all ${cameraShape === shape.id ? 'bg-primary/20 border-primary text-primary' : 'border-gray-700 hover:bg-gray-800 text-gray-400'}`}
+                      disabled={backgroundRemoval}
+                      className={`flex flex-col items-center gap-2 p-3 rounded-lg border transition-all ${cameraShape === shape.id ? 'bg-primary/20 border-primary text-primary' : 'border-gray-700 hover:bg-gray-800 text-gray-400'} disabled:cursor-not-allowed`}
                     >
                       <shape.icon size={24} className={shape.className} />
                       <span className="text-[10px] font-medium">{shape.label}</span>
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Background Removal Toggle */}
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-3 uppercase tracking-wider">Suppression d'arrière-plan</label>
+                <button
+                  onClick={() => setBackgroundRemoval(!backgroundRemoval)}
+                  className={`w-full flex items-center justify-between p-4 rounded-lg border transition-all ${
+                    backgroundRemoval
+                      ? 'bg-primary/20 border-primary text-white'
+                      : 'border-gray-700 hover:bg-gray-800 text-gray-400'
+                  }`}
+                >
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-sm font-medium">
+                      {backgroundRemoval ? 'Activé' : 'Désactivé'}
+                    </span>
+                    <span className="text-[10px] opacity-60">
+                      Détourage IA de la personne (expérimental)
+                    </span>
+                  </div>
+                  <div className={`w-12 h-6 rounded-full relative transition-colors ${backgroundRemoval ? 'bg-primary' : 'bg-gray-600'}`}>
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${backgroundRemoval ? 'translate-x-7' : 'translate-x-1'}`} />
+                  </div>
+                </button>
               </div>
 
             </div>
@@ -990,6 +1113,7 @@ function App() {
                 cameraShape={cameraShape}
                 showFooter={showFooter}
                 onImageResize={handleImageResize}
+                backgroundRemoval={backgroundRemoval}
               />
               
               {/* Overlay Navigation Controls (Visible on hover in preview area) */}
