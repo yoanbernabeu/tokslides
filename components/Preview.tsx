@@ -38,6 +38,30 @@ const blobToDataUrl = (blob: Blob): Promise<string> => {
   });
 };
 
+// Preload all local:// images from markdown into cache before rasterization
+export const preloadLocalImages = async (markdown: string): Promise<void> => {
+  const localImageRegex = /!\[.*?\]\((local:\/\/[^\s")]+)/g;
+  const matches = [...markdown.matchAll(localImageRegex)];
+
+  const loadPromises = matches.map(async (match) => {
+    const src = match[1];
+    if (dataUrlCache.has(src)) return;
+
+    const id = src.replace('local://', '');
+    try {
+      const blob = await getImageFromDB(id);
+      if (blob) {
+        const url = await blobToDataUrl(blob);
+        dataUrlCache.set(src, url);
+      }
+    } catch (e) {
+      console.warn(`Failed to preload ${src}`, e);
+    }
+  });
+
+  await Promise.all(loadPromises);
+};
+
 // Resizable Image Component - memoized to prevent flickering on parent re-renders
 const ResizableImage = React.memo(({
   src,

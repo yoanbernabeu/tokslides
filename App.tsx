@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Editor from './components/Editor';
-import Preview from './components/Preview';
+import Preview, { preloadLocalImages } from './components/Preview';
 import AiPromptModal from './components/AiPromptModal';
 import LandingPage from './components/LandingPage';
 import ProjectManager from './components/ProjectManager';
@@ -223,12 +223,17 @@ function App() {
   // 2. Trigger Rasterization (Snapshot) when slide or theme changes
   useEffect(() => {
     if (!captureRef.current) return;
-    
+
     // Debounce rasterization slightly to allow React to render DOM
     const timer = setTimeout(async () => {
        if (isRasterizingRef.current) return;
        isRasterizingRef.current = true;
        try {
+         // Preload all local:// images into cache before rasterization
+         await preloadLocalImages(markdown);
+         // Small delay to let React re-render with cached images
+         await new Promise(resolve => setTimeout(resolve, 100));
+
          // Rasterize the DOM content (Background + Text + Images)
          // Note: html-to-image is much more reliable than SVG serialization
          const img = await rasterizeElement(captureRef.current!, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -474,6 +479,10 @@ function App() {
     // This ensures we have a valid image of the current slide before the loop starts
     if (captureRef.current) {
        try {
+         // Preload all local:// images into cache before rasterization
+         await preloadLocalImages(markdown);
+         await new Promise(resolve => setTimeout(resolve, 100));
+
          const img = await rasterizeElement(captureRef.current, CANVAS_WIDTH, CANVAS_HEIGHT);
          currentSlideImageRef.current = img;
        } catch (e) {
